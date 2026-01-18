@@ -8,10 +8,10 @@ import os
 from collections.abc import Iterable
 
 import torch
-from torch import nn
-from transformers import AutoTokenizer, UMT5EncoderModel
 from diffusers import AutoencoderKLWan
 from diffusers.utils.torch_utils import randn_tensor
+from torch import nn
+from transformers import AutoTokenizer, UMT5EncoderModel
 
 from vllm.model_executor.models.utils import AutoWeightsLoader
 
@@ -269,11 +269,12 @@ class AniSoraPipeline(nn.Module):
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
-                f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to only forward one."
+                "Cannot forward both `prompt` and `prompt_embeds`. "
+                "Please make sure to only forward one."
             )
         elif negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
-                f"Cannot forward both `negative_prompt`: {negative_prompt} and `negative_prompt_embeds`: {negative_prompt_embeds}."
+                "Cannot forward both `negative_prompt` and `negative_prompt_embeds`."
             )
         elif prompt is None and prompt_embeds is None:
             raise ValueError("Provide either `prompt` or `prompt_embeds`.")
@@ -387,7 +388,9 @@ class AniSoraPipeline(nn.Module):
         return latents
 
     @staticmethod
-    def _load_transformer_config(model_path: str, subfolder: str = "transformer", local_files_only: bool = True) -> dict:
+    def _load_transformer_config(
+        model_path: str, subfolder: str = "transformer", local_files_only: bool = True
+    ) -> dict:
         if local_files_only:
             config_path = os.path.join(model_path, subfolder, "config.json")
             if os.path.exists(config_path):

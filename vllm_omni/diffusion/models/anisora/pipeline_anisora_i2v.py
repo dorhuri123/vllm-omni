@@ -3,15 +3,16 @@
 
 from __future__ import annotations
 
-import os
 import json
+import os
+from collections.abc import Iterable
 
 import PIL.Image
 import torch
-from torch import nn
-from transformers import AutoTokenizer, UMT5EncoderModel
 from diffusers import AutoencoderKLWan
 from diffusers.utils.torch_utils import randn_tensor
+from torch import nn
+from transformers import AutoTokenizer, UMT5EncoderModel
 
 from vllm.model_executor.models.utils import AutoWeightsLoader
 
@@ -427,7 +428,9 @@ class AniSoraI2VPipeline(nn.Module):
         return latents
 
     @staticmethod
-    def _load_transformer_config(model_path: str, subfolder: str = "transformer", local_files_only: bool = True) -> dict:
+    def _load_transformer_config(
+        model_path: str, subfolder: str = "transformer", local_files_only: bool = True
+    ) -> dict:
         if local_files_only:
             config_path = os.path.join(model_path, subfolder, "config.json")
             if os.path.exists(config_path):
