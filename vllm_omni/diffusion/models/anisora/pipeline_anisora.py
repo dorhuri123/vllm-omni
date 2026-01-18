@@ -12,7 +12,6 @@ from diffusers import AutoencoderKLWan
 from diffusers.utils.torch_utils import randn_tensor
 from torch import nn
 from transformers import AutoTokenizer, UMT5EncoderModel
-
 from vllm.model_executor.models.utils import AutoWeightsLoader
 
 from vllm_omni.diffusion.data import DiffusionOutput, OmniDiffusionConfig
@@ -45,7 +44,9 @@ def get_anisora_pre_process_func(
 ):
     """Pre-process function for AniSora T2V (no-op)."""
 
-    def pre_process_func(requests: list[OmniDiffusionRequest]) -> list[OmniDiffusionRequest]:
+    def pre_process_func(
+        requests: list[OmniDiffusionRequest],
+    ) -> list[OmniDiffusionRequest]:
         return requests
 
     return pre_process_func
@@ -72,10 +73,16 @@ class AniSoraPipeline(nn.Module):
         # Components
         self.tokenizer = AutoTokenizer.from_pretrained(model, subfolder="tokenizer", local_files_only=local_files_only)
         self.text_encoder = UMT5EncoderModel.from_pretrained(
-            model, subfolder="text_encoder", torch_dtype=dtype, local_files_only=local_files_only
+            model,
+            subfolder="text_encoder",
+            torch_dtype=dtype,
+            local_files_only=local_files_only,
         ).to(self.device)
         self.vae = AutoencoderKLWan.from_pretrained(
-            model, subfolder="vae", torch_dtype=torch.float32, local_files_only=local_files_only
+            model,
+            subfolder="vae",
+            torch_dtype=torch.float32,
+            local_files_only=local_files_only,
         ).to(self.device)
 
         # Transformer
@@ -268,14 +275,9 @@ class AniSoraPipeline(nn.Module):
             raise ValueError(f"`height` and `width` have to be divisible by 16 but are {height} and {width}.")
 
         if prompt is not None and prompt_embeds is not None:
-            raise ValueError(
-                "Cannot forward both `prompt` and `prompt_embeds`. "
-                "Please make sure to only forward one."
-            )
+            raise ValueError("Cannot forward both `prompt` and `prompt_embeds`. Please make sure to only forward one.")
         elif negative_prompt is not None and negative_prompt_embeds is not None:
-            raise ValueError(
-                "Cannot forward both `negative_prompt` and `negative_prompt_embeds`."
-            )
+            raise ValueError("Cannot forward both `negative_prompt` and `negative_prompt_embeds`.")
         elif prompt is None and prompt_embeds is None:
             raise ValueError("Provide either `prompt` or `prompt_embeds`.")
         elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
@@ -318,7 +320,8 @@ class AniSoraPipeline(nn.Module):
         prompt_embeds = prompt_embeds.to(dtype=dtype, device=device)
         prompt_embeds = [u[:v] for u, v in zip(prompt_embeds, seq_lens)]
         prompt_embeds = torch.stack(
-            [torch.cat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))]) for u in prompt_embeds], dim=0
+            [torch.cat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))]) for u in prompt_embeds],
+            dim=0,
         )
 
         _, seq_len, _ = prompt_embeds.shape
@@ -338,7 +341,10 @@ class AniSoraPipeline(nn.Module):
                 return_attention_mask=True,
                 return_tensors="pt",
             )
-            ids_neg, mask_neg = neg_text_inputs.input_ids, neg_text_inputs.attention_mask
+            ids_neg, mask_neg = (
+                neg_text_inputs.input_ids,
+                neg_text_inputs.attention_mask,
+            )
             seq_lens_neg = mask_neg.gt(0).sum(dim=1).long()
             negative_prompt_embeds = self.text_encoder(ids_neg.to(device), mask_neg.to(device)).last_hidden_state
             negative_prompt_embeds = negative_prompt_embeds.to(dtype=dtype, device=device)

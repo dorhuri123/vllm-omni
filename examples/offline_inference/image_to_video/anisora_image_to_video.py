@@ -29,12 +29,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--negative_prompt", default="", help="Negative prompt.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--guidance_scale", type=float, default=5.0, help="CFG scale.")
-    parser.add_argument("--height", type=int, default=None, help="Video height (auto-calculated if not set).")
-    parser.add_argument("--width", type=int, default=None, help="Video width (auto-calculated if not set).")
+    parser.add_argument(
+        "--height",
+        type=int,
+        default=None,
+        help="Video height (auto-calculated if not set).",
+    )
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=None,
+        help="Video width (auto-calculated if not set).",
+    )
     parser.add_argument("--num_frames", type=int, default=81, help="Number of frames.")
     parser.add_argument("--num_inference_steps", type=int, default=50, help="Sampling steps.")
     parser.add_argument("--flow_shift", type=float, default=5.0, help="Scheduler flow_shift.")
-    parser.add_argument("--output", type=str, default="anisora_i2v.mp4", help="Path to save the video (mp4).")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="anisora_i2v.mp4",
+        help="Path to save the video (mp4).",
+    )
     parser.add_argument("--fps", type=int, default=16, help="Frames per second for the output video.")
     return parser.parse_args()
 

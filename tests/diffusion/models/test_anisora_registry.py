@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 from vllm_omni.diffusion.registry import (
-    PIPELINE_REGISTRY,
-    DIFFUSION_PRE_PROCESS_MAP,
     DIFFUSION_POST_PROCESS_MAP,
+    DIFFUSION_PRE_PROCESS_MAP,
+    PIPELINE_REGISTRY,
 )
 
 

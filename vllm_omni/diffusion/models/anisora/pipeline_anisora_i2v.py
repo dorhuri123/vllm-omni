@@ -13,7 +13,6 @@ from diffusers import AutoencoderKLWan
 from diffusers.utils.torch_utils import randn_tensor
 from torch import nn
 from transformers import AutoTokenizer, UMT5EncoderModel
-
 from vllm.model_executor.models.utils import AutoWeightsLoader
 
 from vllm_omni.diffusion.data import DiffusionOutput, OmniDiffusionConfig
@@ -46,7 +45,9 @@ def get_anisora_i2v_pre_process_func(
 ):
     """Pre-process function for AniSora I2V: load input image if provided."""
 
-    def pre_process_func(requests: list[OmniDiffusionRequest]) -> list[OmniDiffusionRequest]:
+    def pre_process_func(
+        requests: list[OmniDiffusionRequest],
+    ) -> list[OmniDiffusionRequest]:
         for req in requests:
             if req.image_path is not None and req.pil_image is None:
                 req.pil_image = PIL.Image.open(req.image_path).convert("RGB")
@@ -76,10 +77,16 @@ class AniSoraI2VPipeline(nn.Module):
         # Components
         self.tokenizer = AutoTokenizer.from_pretrained(model, subfolder="tokenizer", local_files_only=local_files_only)
         self.text_encoder = UMT5EncoderModel.from_pretrained(
-            model, subfolder="text_encoder", torch_dtype=dtype, local_files_only=local_files_only
+            model,
+            subfolder="text_encoder",
+            torch_dtype=dtype,
+            local_files_only=local_files_only,
         ).to(self.device)
         self.vae = AutoencoderKLWan.from_pretrained(
-            model, subfolder="vae", torch_dtype=torch.float32, local_files_only=local_files_only
+            model,
+            subfolder="vae",
+            torch_dtype=torch.float32,
+            local_files_only=local_files_only,
         ).to(self.device)
 
         # Transformer
@@ -241,7 +248,13 @@ class AniSoraI2VPipeline(nn.Module):
         latent_height = latents.shape[3]
         latent_width = latents.shape[4]
         first_frame_mask = torch.ones(
-            1, 1, num_latent_frames, latent_height, latent_width, dtype=torch.float32, device=device
+            1,
+            1,
+            num_latent_frames,
+            latent_height,
+            latent_width,
+            dtype=torch.float32,
+            device=device,
         )
         first_frame_mask[:, :, 0] = 0
 
@@ -358,7 +371,8 @@ class AniSoraI2VPipeline(nn.Module):
         prompt_embeds = prompt_embeds.to(dtype=dtype, device=device)
         prompt_embeds = [u[:v] for u, v in zip(prompt_embeds, seq_lens)]
         prompt_embeds = torch.stack(
-            [torch.cat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))]) for u in prompt_embeds], dim=0
+            [torch.cat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))]) for u in prompt_embeds],
+            dim=0,
         )
 
         _, seq_len, _ = prompt_embeds.shape
@@ -378,7 +392,10 @@ class AniSoraI2VPipeline(nn.Module):
                 return_attention_mask=True,
                 return_tensors="pt",
             )
-            ids_neg, mask_neg = neg_text_inputs.input_ids, neg_text_inputs.attention_mask
+            ids_neg, mask_neg = (
+                neg_text_inputs.input_ids,
+                neg_text_inputs.attention_mask,
+            )
             seq_lens_neg = mask_neg.gt(0).sum(dim=1).long()
             negative_prompt_embeds = self.text_encoder(ids_neg.to(device), mask_neg.to(device)).last_hidden_state
             negative_prompt_embeds = negative_prompt_embeds.to(dtype=dtype, device=device)
