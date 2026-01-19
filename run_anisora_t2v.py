@@ -99,30 +99,47 @@ def main():
     generator = torch.Generator(device=device).manual_seed(args.seed)
 
     # Load reference image if provided (for I2V)
+    print(f"\n{'='*70}")
+    print(f"📥 PHASE 1: Loading Input")
+    print(f"{'='*70}")
+    
     image = None
     if args.image:
-        print(f"📥 Loading reference image: {args.image}")
+        print(f"   Loading reference image: {args.image}")
         if args.image.startswith("http://") or args.image.startswith("https://"):
             import requests
             from io import BytesIO
 
+            print("   Downloading image from URL...")
             response = requests.get(args.image, timeout=30)
             image = PIL.Image.open(BytesIO(response.content)).convert("RGB")
+            print(f"   ✅ Downloaded successfully (size: {len(response.content) / 1024 / 1024:.2f} MB)")
         else:
+            print("   Loading local image...")
             image = PIL.Image.open(args.image).convert("RGB")
+            print(f"   ✅ Loaded successfully")
         image = image.resize((args.width, args.height), PIL.Image.Resampling.LANCZOS)
-        print(f"   Resized to: {args.width}x{args.height}")
+        print(f"   Resizing to: {args.width}x{args.height}...")
+        print(f"   ✅ Image ready")
         generation_type = "I2V (Image-to-Video)"
     else:
         generation_type = (
-            "T2V (Text-to-Video) - Note: Using I2V model with generated reference"
+            "T2V (Text-to-Video) - Using I2V model with generated reference"
         )
         print("⚠️  No image provided, using I2V model in text-only mode")
+        print(f"   Mode: {generation_type}")
+    print()
 
     # Initialize Omni
-    print(f"\n🚀 Initializing AniSora {generation_type}...")
+    print(f"{'='*70}")
+    print(f"🚀 PHASE 2: Initializing AniSora {generation_type}")
+    print(f"{'='*70}")
     print(f"   Model: Disty0/Index-anisora-5B-diffusers")
-    print("   (First run may take 10-15 min to download 21.5GB model...)")
+    print(f"   Model size: 21.5 GB")
+    print(f"   VAE slicing: True | VAE tiling: True")
+    print(f"   Flow shift: {args.flow_shift}")
+    print(f"   (First run may take 10-15 min to download model...)")
+    print(f"   Waiting for pipeline initialization...")
     omni = Omni(
         model="Disty0/Index-anisora-5B-diffusers",
         model_class_name="AniSoraImageToVideoPipeline",
@@ -131,15 +148,24 @@ def main():
         flow_shift=args.flow_shift,
         stage_init_timeout=1200,  # 20 minutes for first-time model download + initialization
     )
-    print("✅ Pipeline initialized\n")
+    print(f"   ✅ Pipeline initialized successfully\n")
 
     # Generate video
-    print("🎬 Generating video...")
+    print(f"{'='*70}")
+    print(f"🎬 PHASE 3: Generating Video")
+    print(f"{'='*70}")
     print(f"   Prompt: {args.prompt}")
-    print(
-        f"   Params: {args.width}x{args.height}, {args.num_frames} frames, {args.num_inference_steps} steps"
-    )
-    print(f"   Guidance: {args.guidance_scale}")
+    if args.negative_prompt:
+        print(f"   Negative prompt: {args.negative_prompt}")
+    print(f"   Resolution: {args.width}x{args.height}")
+    print(f"   Frames: {args.num_frames}")
+    print(f"   Inference steps: {args.num_inference_steps}")
+    print(f"   Guidance scale: {args.guidance_scale}")
+    if image is not None:
+        print(f"   Mode: Image-to-Video (using provided reference)")
+    else:
+        print(f"   Mode: Text-only (reference will be generated)")
+    print(f"   Starting generation...")
 
     generate_kwargs = {
         "prompt": args.prompt,
@@ -157,8 +183,13 @@ def main():
         generate_kwargs["pil_image"] = image
 
     frames = omni.generate(**generate_kwargs)
+    print(f"   ✅ Generation complete\n")
 
     # Extract video frames from OmniRequestOutput
+    print(f"{'='*70}")
+    print(f"📦 PHASE 4: Processing Output")
+    print(f"{'='*70}")
+    print(f"   Extracting frames from output...")
     if isinstance(frames, list) and len(frames) > 0:
         first_item = frames[0]
 
@@ -188,15 +219,22 @@ def main():
             else:
                 raise ValueError("No video frames found in OmniRequestOutput.")
 
+    print(f"   ✅ Frames extracted\n")
+
     # Save video
+    print(f"{'='*70}")
+    print(f"💾 PHASE 5: Saving Video")
+    print(f"{'='*70}")
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"   Output path: {output_path}")
 
     try:
         from diffusers.utils import export_to_video
     except ImportError:
         raise ImportError("diffusers is required for export_to_video.")
 
+    print(f"   Converting frames to video tensor...")
     if isinstance(frames, torch.Tensor):
         video_tensor = frames.detach().cpu()
         if video_tensor.dim() == 5:
@@ -217,13 +255,16 @@ def main():
     if isinstance(video_array, np.ndarray) and video_array.ndim == 4:
         video_array = list(video_array)
 
+    print(f"   Exporting to MP4 (fps={args.fps})...")
     export_to_video(video_array, str(output_path), fps=args.fps)
+    print(f"   ✅ Video saved\n")
 
-    print(f"\n✅ Video saved to: {output_path}")
+    print(f"{'='*70}")
+    print(f"🎉 SUCCESS - AniSora generation complete!")
+    print(f"{'='*70}")
+    print(f"   Output: {output_path}")
     print(f"   FPS: {args.fps}")
-    print("\n" + "=" * 70)
-    print("🎉 AniSora generation complete!")
-    print("=" * 70)
+    print(f"{'='*70}\n")
 
 
 if __name__ == "__main__":
