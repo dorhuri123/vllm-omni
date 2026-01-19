@@ -117,6 +117,7 @@ def main():
     print(f"   Model: Disty0/Index-anisora-5B-diffusers")
     omni = Omni(
         model="Disty0/Index-anisora-5B-diffusers",
+        model_class_name="AniSoraImageToVideoPipeline",
         vae_use_slicing=True,
         vae_use_tiling=True,
         flow_shift=args.flow_shift,
