@@ -122,12 +122,14 @@ def main():
     # Initialize Omni
     print(f"\n🚀 Initializing AniSora {generation_type}...")
     print(f"   Model: Disty0/Index-anisora-5B-diffusers")
+    print("   (First run may take 10-15 min to download 21.5GB model...)")
     omni = Omni(
         model="Disty0/Index-anisora-5B-diffusers",
         model_class_name="AniSoraImageToVideoPipeline",
         vae_use_slicing=True,
         vae_use_tiling=True,
         flow_shift=args.flow_shift,
+        stage_init_timeout=1200,  # 20 minutes for first-time model download + initialization
     )
     print("✅ Pipeline initialized\n")
 
