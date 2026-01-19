@@ -102,7 +102,13 @@ def main():
     image = None
     if args.image:
         print(f"📥 Loading reference image: {args.image}")
-        image = PIL.Image.open(args.image).convert("RGB")
+        if args.image.startswith("http://") or args.image.startswith("https://"):
+            import requests
+            from io import BytesIO
+            response = requests.get(args.image, timeout=30)
+            image = PIL.Image.open(BytesIO(response.content)).convert("RGB")
+        else:
+            image = PIL.Image.open(args.image).convert("RGB")
         image = image.resize((args.width, args.height), PIL.Image.Resampling.LANCZOS)
         print(f"   Resized to: {args.width}x{args.height}")
         generation_type = "I2V (Image-to-Video)"

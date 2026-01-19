@@ -97,9 +97,15 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     generator = torch.Generator(device=device).manual_seed(args.seed)
 
-    # Load input image
+    # Load input image (handle both URLs and local paths)
     print(f"📥 Loading image: {args.image}")
-    image = PIL.Image.open(args.image).convert("RGB")
+    if args.image.startswith("http://") or args.image.startswith("https://"):
+        import requests
+        from io import BytesIO
+        response = requests.get(args.image, timeout=30)
+        image = PIL.Image.open(BytesIO(response.content)).convert("RGB")
+    else:
+        image = PIL.Image.open(args.image).convert("RGB")
 
     # Resize to target dimensions
     image = image.resize((args.width, args.height), PIL.Image.Resampling.LANCZOS)
