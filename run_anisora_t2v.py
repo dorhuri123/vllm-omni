@@ -105,6 +105,7 @@ def main():
         if args.image.startswith("http://") or args.image.startswith("https://"):
             import requests
             from io import BytesIO
+
             response = requests.get(args.image, timeout=30)
             image = PIL.Image.open(BytesIO(response.content)).convert("RGB")
         else:
