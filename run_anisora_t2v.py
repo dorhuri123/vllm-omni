@@ -146,7 +146,6 @@ def main():
         vae_use_slicing=True,
         vae_use_tiling=True,
         flow_shift=args.flow_shift,
-        init_timeout=1200,  # 20 minutes for first-time model download + initialization
     )
     print(f"   ✅ Pipeline initialized successfully\n")
 
