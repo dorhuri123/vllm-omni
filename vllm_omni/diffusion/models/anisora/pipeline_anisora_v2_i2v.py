@@ -127,58 +127,50 @@ class AniSoraV2I2VPipeline(nn.Module):
 
         # Load transformer from AniSora weights
         # Note: aardsoul-music/Wan2.1-Anisora-14B uses old "WanModel" class
-        # We need to load it with the correct config
+        # We load the config from Wan I2V base (which has correct in_channels=36)
+        # and then load weights from AniSora
         print(f"Loading transformer from AniSora: {model_path}...")
         
-        # First, try loading with subfolder if it's structured like diffusers
-        try:
-            self.transformer = WanTransformer3DModel.from_pretrained(
-                model_path,
-                subfolder="transformer",
-                torch_dtype=dtype,
-                local_files_only=local_anisora,
-            )
-        except (OSError, ValueError):
-            # If that fails, load directly but with correct config from Wan I2V base
-            print("Using Wan2.1 I2V base config for transformer...")
-            from diffusers import WanTransformer3DModel
-            
-            # Load config from Wan I2V base (which has in_channels=36)
-            base_config = WanTransformer3DModel.load_config(
-                wan_base_path,
-                subfolder="transformer",
-                local_files_only=local_wan,
-            )
-            
-            # Create transformer with correct config
-            self.transformer = WanTransformer3DModel.from_config(base_config)
-            
-            # Load weights from AniSora
-            from safetensors.torch import load_file
-            import glob
-            import os as os_module
-            
-            # Find safetensor files
-            if local_anisora:
-                weight_path = model_path
-            else:
-                from huggingface_hub import snapshot_download
-                weight_path = snapshot_download(model_path, local_files_only=False)
-            
-            safetensor_files = glob.glob(os_module.path.join(weight_path, "*.safetensors"))
-            if not safetensor_files:
-                safetensor_files = glob.glob(os_module.path.join(weight_path, "**/*.safetensors"), recursive=True)
-            
-            state_dict = {}
-            for sf_path in safetensor_files:
-                state_dict.update(load_file(sf_path))
-            
-            # Load state dict
-            missing, unexpected = self.transformer.load_state_dict(state_dict, strict=False)
-            if missing:
-                print(f"  Missing keys: {len(missing)}")
-            if unexpected:
-                print(f"  Unexpected keys: {len(unexpected)}")
+        # Load config from Wan I2V base (which has in_channels=36 for I2V)
+        print("  Using Wan2.1 I2V base config...")
+        base_config = WanTransformer3DModel.load_config(
+            wan_base_path,
+            subfolder="transformer",
+            local_files_only=local_wan,
+        )
+        
+        # Create transformer with correct config
+        self.transformer = WanTransformer3DModel.from_config(base_config)
+        
+        # Load weights from AniSora
+        print("  Downloading AniSora weights...")
+        from safetensors.torch import load_file
+        import glob
+        import os as os_module
+        from huggingface_hub import snapshot_download
+        
+        # Download/locate weight files
+        if local_anisora:
+            weight_path = model_path
+        else:
+            weight_path = snapshot_download(model_path, local_files_only=False)
+        
+        # Find safetensor files
+        safetensor_files = glob.glob(os_module.path.join(weight_path, "*.safetensors"))
+        if not safetensor_files:
+            safetensor_files = glob.glob(os_module.path.join(weight_path, "**/*.safetensors"), recursive=True)
+        
+        print(f"  Loading {len(safetensor_files)} weight files...")
+        state_dict = {}
+        for sf_path in safetensor_files:
+            state_dict.update(load_file(sf_path))
+        
+        # Load state dict
+        missing, unexpected = self.transformer.load_state_dict(state_dict, strict=False)
+        if missing:
+            print(f"  Missing keys: {len(missing)}")
+        if unexpected:
+            print(f"  Unexpected keys: {len(unexpected)}")
         
         self.transformer = self.transformer.to(dtype)
 
