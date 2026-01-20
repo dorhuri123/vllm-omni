@@ -1,8 +1,64 @@
 # Image-To-Video
 
-This example demonstrates how to generate videos from images using Wan2.2 Image-to-Video models with vLLM-Omni's offline inference API.
+This example demonstrates how to generate videos from images using vLLM-Omni's offline inference API.
 
-## Local CLI Usage
+## Supported Models
+
+- **Wan2.2-I2V-A14B-Diffusers** (MoE) - Alibaba's Wan2.2 14B MoE model
+- **Wan2.2-TI2V-5B-Diffusers** (Unified) - Alibaba's unified T2V+I2V 5B model
+- **AniSora V1 (5B)** - CogVideoX-based anime video generation
+- **AniSora V2/V3 (14B)** - Wan2.1-based anime video generation
+
+---
+
+## AniSora V1 (5B) - CogVideoX-based
+
+Optimized for anime-style video generation using CogVideoX architecture.
+
+```bash
+python anisora_image_to_video.py \
+  --model IndexTeam/AniSora-v1-i2v-diffusers \
+  --image input.png \
+  --prompt "anime girl walking, flowing hair, studio ghibli style" \
+  --height 480 \
+  --width 720 \
+  --num_frames 49 \
+  --guidance_scale 5.0 \
+  --num_inference_steps 50 \
+  --fps 16 \
+  --output anisora_v1.mp4
+```
+
+**Requirements:** ~24GB VRAM
+
+---
+
+## AniSora V2/V3 (14B) - Wan2.1-based
+
+High-quality anime video generation using Wan2.1 architecture with community weights.
+
+```bash
+python anisora_v2_image_to_video.py \
+  --image input.png \
+  --prompt "anime scene, high quality animation, smooth motion" \
+  --height 480 \
+  --width 832 \
+  --num-frames 49 \
+  --guidance-scale 5.0 \
+  --num-inference-steps 30 \
+  --fps 8 \
+  --output anisora_v2.mp4
+```
+
+**Requirements:** ~65GB VRAM for 14B model in bfloat16
+
+**Supported transformer models:**
+- `aardsoul-music/Wan2.1-Anisora-14B` (recommended)
+- `ikusa/anisorav2`
+
+---
+
+## Wan2.2 Models
 
 ### Wan2.2-I2V-A14B-Diffusers (MoE)
 ```bash
