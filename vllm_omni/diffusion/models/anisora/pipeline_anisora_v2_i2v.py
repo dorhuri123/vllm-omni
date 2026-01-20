@@ -126,12 +126,61 @@ class AniSoraV2I2VPipeline(nn.Module):
         )
 
         # Load transformer from AniSora weights
+        # Note: aardsoul-music/Wan2.1-Anisora-14B uses old "WanModel" class
+        # We need to load it with the correct config
         print(f"Loading transformer from AniSora: {model_path}...")
-        self.transformer = WanTransformer3DModel.from_pretrained(
-            model_path,
-            torch_dtype=dtype,
-            local_files_only=local_anisora,
-        )
+        
+        # First, try loading with subfolder if it's structured like diffusers
+        try:
+            self.transformer = WanTransformer3DModel.from_pretrained(
+                model_path,
+                subfolder="transformer",
+                torch_dtype=dtype,
+                local_files_only=local_anisora,
+            )
+        except (OSError, ValueError):
+            # If that fails, load directly but with correct config from Wan I2V base
+            print("Using Wan2.1 I2V base config for transformer...")
+            from diffusers import WanTransformer3DModel
+            
+            # Load config from Wan I2V base (which has in_channels=36)
+            base_config = WanTransformer3DModel.load_config(
+                wan_base_path,
+                subfolder="transformer",
+                local_files_only=local_wan,
+            )
+            
+            # Create transformer with correct config
+            self.transformer = WanTransformer3DModel.from_config(base_config)
+            
+            # Load weights from AniSora
+            from safetensors.torch import load_file
+            import glob
+            import os as os_module
+            
+            # Find safetensor files
+            if local_anisora:
+                weight_path = model_path
+            else:
+                from huggingface_hub import snapshot_download
+                weight_path = snapshot_download(model_path, local_files_only=False)
+            
+            safetensor_files = glob.glob(os_module.path.join(weight_path, "*.safetensors"))
+            if not safetensor_files:
+                safetensor_files = glob.glob(os_module.path.join(weight_path, "**/*.safetensors"), recursive=True)
+            
+            state_dict = {}
+            for sf_path in safetensor_files:
+                state_dict.update(load_file(sf_path))
+            
+            # Load state dict
+            missing, unexpected = self.transformer.load_state_dict(state_dict, strict=False)
+            if missing:
+                print(f"  Missing keys: {len(missing)}")
+            if unexpected:
+                print(f"  Unexpected keys: {len(unexpected)}")
+        
+        self.transformer = self.transformer.to(dtype)
 
         # Initialize scheduler
         print("Initializing scheduler...")
@@ -142,8 +191,12 @@ class AniSoraV2I2VPipeline(nn.Module):
         )
 
         # VAE scale factors
-        self.vae_scale_factor_temporal = getattr(self.vae.config, "temporal_compression_ratio", 4)
-        self.vae_scale_factor_spatial = getattr(self.vae.config, "spatial_compression_ratio", 8)
+        self.vae_scale_factor_temporal = getattr(
+            self.vae.config, "temporal_compression_ratio", 4
+        )
+        self.vae_scale_factor_spatial = getattr(
+            self.vae.config, "spatial_compression_ratio", 8
+        )
 
         self._current_timestep = None
         print("Pipeline loaded successfully!")
@@ -221,12 +274,20 @@ class AniSoraV2I2VPipeline(nn.Module):
             mask_neg = neg_text_inputs.attention_mask.to(self.device)
             seq_lens_neg = mask_neg.gt(0).sum(dim=1).long()
 
-            negative_prompt_embeds = self.text_encoder(ids_neg, mask_neg).last_hidden_state
-            negative_prompt_embeds = negative_prompt_embeds.to(dtype=self.dtype, device=self.device)
-            negative_prompt_embeds = [u[:v] for u, v in zip(negative_prompt_embeds, seq_lens_neg)]
+            negative_prompt_embeds = self.text_encoder(
+                ids_neg, mask_neg
+            ).last_hidden_state
+            negative_prompt_embeds = negative_prompt_embeds.to(
+                dtype=self.dtype, device=self.device
+            )
+            negative_prompt_embeds = [
+                u[:v] for u, v in zip(negative_prompt_embeds, seq_lens_neg)
+            ]
             negative_prompt_embeds = torch.stack(
                 [
-                    torch.cat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))])
+                    torch.cat(
+                        [u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))]
+                    )
                     for u in negative_prompt_embeds
                 ],
                 dim=0,
@@ -240,7 +301,9 @@ class AniSoraV2I2VPipeline(nn.Module):
         if not self.has_image_encoder:
             return None
 
-        pixel_values = self.image_processor(images=image, return_tensors="pt").pixel_values
+        pixel_values = self.image_processor(
+            images=image, return_tensors="pt"
+        ).pixel_values
         pixel_values = pixel_values.to(device=self.device, dtype=self.dtype)
         image_embeds = self.image_encoder(pixel_values, output_hidden_states=True)
         return image_embeds.hidden_states[-2]
@@ -270,7 +333,13 @@ class AniSoraV2I2VPipeline(nn.Module):
         latent_height = height // self.vae_scale_factor_spatial
         latent_width = width // self.vae_scale_factor_spatial
 
-        shape = (batch_size, num_channels_latents, num_latent_frames, latent_height, latent_width)
+        shape = (
+            batch_size,
+            num_channels_latents,
+            num_latent_frames,
+            latent_height,
+            latent_width,
+        )
 
         # Generate noise
         latents = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
@@ -281,7 +350,12 @@ class AniSoraV2I2VPipeline(nn.Module):
         if last_image is None:
             # Pad with zeros for remaining frames
             video_condition = torch.cat(
-                [image, image.new_zeros(image.shape[0], image.shape[1], num_frames - 1, height, width)],
+                [
+                    image,
+                    image.new_zeros(
+                        image.shape[0], image.shape[1], num_frames - 1, height, width
+                    ),
+                ],
                 dim=2,
             )
         else:
@@ -290,7 +364,9 @@ class AniSoraV2I2VPipeline(nn.Module):
             video_condition = torch.cat(
                 [
                     image,
-                    image.new_zeros(image.shape[0], image.shape[1], num_frames - 2, height, width),
+                    image.new_zeros(
+                        image.shape[0], image.shape[1], num_frames - 2, height, width
+                    ),
                     last_image,
                 ],
                 dim=2,
@@ -303,24 +379,26 @@ class AniSoraV2I2VPipeline(nn.Module):
         latent_condition = latent_condition.repeat(batch_size, 1, 1, 1, 1)
 
         # Normalize latents
-        if hasattr(self.vae.config, "latents_mean") and self.vae.config.latents_mean is not None:
+        if (
+            hasattr(self.vae.config, "latents_mean")
+            and self.vae.config.latents_mean is not None
+        ):
             latents_mean = (
                 torch.tensor(self.vae.config.latents_mean)
                 .view(1, -1, 1, 1, 1)
                 .to(latent_condition.device, latent_condition.dtype)
             )
-            latents_std = (
-                1.0
-                / torch.tensor(self.vae.config.latents_std)
-                .view(1, -1, 1, 1, 1)
-                .to(latent_condition.device, latent_condition.dtype)
-            )
+            latents_std = 1.0 / torch.tensor(self.vae.config.latents_std).view(
+                1, -1, 1, 1, 1
+            ).to(latent_condition.device, latent_condition.dtype)
             latent_condition = (latent_condition - latents_mean) * latents_std
 
         latent_condition = latent_condition.to(dtype)
 
         # Create mask: 1 for frames with condition, 0 for frames to generate
-        mask_lat_size = torch.ones(batch_size, 1, num_frames, latent_height, latent_width, device=device)
+        mask_lat_size = torch.ones(
+            batch_size, 1, num_frames, latent_height, latent_width, device=device
+        )
         if last_image is None:
             mask_lat_size[:, :, 1:] = 0  # Only first frame is conditioned
         else:
@@ -328,7 +406,9 @@ class AniSoraV2I2VPipeline(nn.Module):
 
         # Compress mask temporally
         first_frame_mask = mask_lat_size[:, :, 0:1]
-        first_frame_mask = first_frame_mask.repeat(1, 1, self.vae_scale_factor_temporal, 1, 1)
+        first_frame_mask = first_frame_mask.repeat(
+            1, 1, self.vae_scale_factor_temporal, 1, 1
+        )
         mask_lat_size = torch.cat([first_frame_mask, mask_lat_size[:, :, 1:]], dim=2)
         mask_lat_size = mask_lat_size.view(
             batch_size, -1, self.vae_scale_factor_temporal, latent_height, latent_width
@@ -341,7 +421,13 @@ class AniSoraV2I2VPipeline(nn.Module):
 
         # Return placeholder for first_frame_mask (not used in this mode)
         first_frame_mask = torch.ones(
-            1, 1, num_latent_frames, latent_height, latent_width, dtype=dtype, device=device
+            1,
+            1,
+            num_latent_frames,
+            latent_height,
+            latent_width,
+            dtype=dtype,
+            device=device,
         )
 
         return latents, condition, first_frame_mask
@@ -380,16 +466,23 @@ class AniSoraV2I2VPipeline(nn.Module):
         # Ensure num_frames is compatible with VAE temporal scaling
         if num_frames % self.vae_scale_factor_temporal != 1:
             num_frames = (
-                num_frames // self.vae_scale_factor_temporal * self.vae_scale_factor_temporal + 1
+                num_frames
+                // self.vae_scale_factor_temporal
+                * self.vae_scale_factor_temporal
+                + 1
             )
         num_frames = max(num_frames, 1)
 
         # Encode prompt
         print("Encoding prompts...")
-        prompt_embeds, negative_prompt_embeds = self.encode_prompt(prompt, negative_prompt)
+        prompt_embeds, negative_prompt_embeds = self.encode_prompt(
+            prompt, negative_prompt
+        )
         batch_size = prompt_embeds.shape[0]
 
-        do_classifier_free_guidance = guidance_scale > 1.0 and negative_prompt_embeds is not None
+        do_classifier_free_guidance = (
+            guidance_scale > 1.0 and negative_prompt_embeds is not None
+        )
 
         # Encode image with CLIP for additional conditioning
         image_embeds = None
@@ -410,8 +503,12 @@ class AniSoraV2I2VPipeline(nn.Module):
         # Handle last_image if provided
         last_image_tensor = None
         if last_image is not None:
-            last_image_tensor = video_processor.preprocess(last_image, height=height, width=width)
-            last_image_tensor = last_image_tensor.to(device=self.device, dtype=torch.float32)
+            last_image_tensor = video_processor.preprocess(
+                last_image, height=height, width=width
+            )
+            last_image_tensor = last_image_tensor.to(
+                device=self.device, dtype=torch.float32
+            )
 
         # Prepare latents
         print("Preparing latents...")
@@ -477,18 +574,18 @@ class AniSoraV2I2VPipeline(nn.Module):
         latents = latents.to(self.vae.dtype)
 
         # Denormalize
-        if hasattr(self.vae.config, "latents_mean") and self.vae.config.latents_mean is not None:
+        if (
+            hasattr(self.vae.config, "latents_mean")
+            and self.vae.config.latents_mean is not None
+        ):
             latents_mean = (
                 torch.tensor(self.vae.config.latents_mean)
                 .view(1, -1, 1, 1, 1)
                 .to(latents.device, latents.dtype)
             )
-            latents_std = (
-                1.0
-                / torch.tensor(self.vae.config.latents_std)
-                .view(1, -1, 1, 1, 1)
-                .to(latents.device, latents.dtype)
-            )
+            latents_std = 1.0 / torch.tensor(self.vae.config.latents_std).view(
+                1, -1, 1, 1, 1
+            ).to(latents.device, latents.dtype)
             latents = latents / latents_std + latents_mean
 
         video = self.vae.decode(latents, return_dict=False)[0]
@@ -542,7 +639,9 @@ if __name__ == "__main__":
     # Save video
     from diffusers.utils import export_to_video
 
-    video = output.output[0].permute(1, 2, 3, 0).cpu().numpy()  # [C, F, H, W] -> [F, H, W, C]
+    video = (
+        output.output[0].permute(1, 2, 3, 0).cpu().numpy()
+    )  # [C, F, H, W] -> [F, H, W, C]
     video = ((video + 1) / 2 * 255).clip(0, 255).astype("uint8")
     export_to_video(video, "/workspace/test_anisora_v2.mp4", fps=16)
     print("Video saved to /workspace/test_anisora_v2.mp4")
