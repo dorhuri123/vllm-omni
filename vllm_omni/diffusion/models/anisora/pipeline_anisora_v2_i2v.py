@@ -165,24 +165,71 @@ class AniSoraV2I2VPipeline(nn.Module):
             state_dict.update(load_file(sf_path))
         
         # Convert AniSora key names to diffusers format
-        # AniSora: blocks.X.self_attn.k.weight -> Diffusers: blocks.X.attn1.to_k.weight
-        # AniSora: blocks.X.cross_attn.k.weight -> Diffusers: blocks.X.attn2.to_k.weight
+        # The key conversion has two parts:
+        # 1. Block-level keys (attention, ffn, normalization)
+        # 2. Non-block keys (embeddings, projections)
         print("  Converting key names to diffusers format...")
         converted_state_dict = {}
         for key, value in state_dict.items():
             new_key = key
-            # Convert attention layer names
+            
+            # === Block-level conversions ===
+            # Attention layer names: self_attn -> attn1, cross_attn -> attn2
             new_key = new_key.replace(".self_attn.", ".attn1.")
             new_key = new_key.replace(".cross_attn.", ".attn2.")
-            # Convert projection names
-            new_key = new_key.replace(".k.", ".to_k.")
-            new_key = new_key.replace(".q.", ".to_q.")
-            new_key = new_key.replace(".v.", ".to_v.")
-            new_key = new_key.replace(".o.", ".to_out.0.")
-            # Convert image key/value projections
+            
+            # Projection names: k -> to_k, q -> to_q, v -> to_v, o -> to_out.0
+            # Must be done after attention layer conversion to avoid double conversion
+            if ".attn1." in new_key or ".attn2." in new_key:
+                new_key = new_key.replace(".k.", ".to_k.")
+                new_key = new_key.replace(".q.", ".to_q.")
+                new_key = new_key.replace(".v.", ".to_v.")
+                new_key = new_key.replace(".o.", ".to_out.0.")
+            
+            # Image key/value projections for cross-attention
             new_key = new_key.replace(".k_img.", ".add_k_proj.")
             new_key = new_key.replace(".v_img.", ".add_v_proj.")
             new_key = new_key.replace(".norm_k_img.", ".norm_added_k.")
+            
+            # FFN conversion: ffn.0 -> ffn.net.0.proj, ffn.2 -> ffn.net.2
+            new_key = new_key.replace(".ffn.0.", ".ffn.net.0.proj.")
+            new_key = new_key.replace(".ffn.2.", ".ffn.net.2.")
+            
+            # Normalization: norm3 -> norm2 (post-attention layer norm)
+            new_key = new_key.replace(".norm3.", ".norm2.")
+            
+            # Modulation -> scale_shift_table
+            new_key = new_key.replace(".modulation", ".scale_shift_table")
+            
+            # === Non-block (global) conversions ===
+            # Text embedding: text_embedding.0 -> condition_embedder.text_embedder.linear_1
+            new_key = new_key.replace("text_embedding.0.", "condition_embedder.text_embedder.linear_1.")
+            new_key = new_key.replace("text_embedding.2.", "condition_embedder.text_embedder.linear_2.")
+            
+            # Time embedding: time_embedding.0 -> condition_embedder.time_embedder.linear_1
+            new_key = new_key.replace("time_embedding.0.", "condition_embedder.time_embedder.linear_1.")
+            new_key = new_key.replace("time_embedding.2.", "condition_embedder.time_embedder.linear_2.")
+            
+            # Time projection: time_projection.1 -> condition_embedder.time_proj
+            new_key = new_key.replace("time_projection.1.", "condition_embedder.time_proj.")
+            
+            # Head output: head.head -> proj_out
+            new_key = new_key.replace("head.head.", "proj_out.")
+            # head.modulation -> scale_shift_table (global)
+            if new_key == "head.scale_shift_table":
+                new_key = "scale_shift_table"
+            
+            # Image embedder: img_emb.proj -> condition_embedder.image_embedder
+            # Based on shape matching:
+            # img_emb.proj.0 (1280) -> condition_embedder.image_embedder.norm1 (LayerNorm)
+            # img_emb.proj.1 (1280x1280) -> condition_embedder.image_embedder.ff.net.0.proj
+            # img_emb.proj.3 (5120x1280) -> condition_embedder.image_embedder.ff.net.2
+            # img_emb.proj.4 (5120) -> condition_embedder.image_embedder.norm2 (LayerNorm)
+            new_key = new_key.replace("img_emb.proj.0.", "condition_embedder.image_embedder.norm1.")
+            new_key = new_key.replace("img_emb.proj.1.", "condition_embedder.image_embedder.ff.net.0.proj.")
+            new_key = new_key.replace("img_emb.proj.3.", "condition_embedder.image_embedder.ff.net.2.")
+            new_key = new_key.replace("img_emb.proj.4.", "condition_embedder.image_embedder.norm2.")
+            
             converted_state_dict[new_key] = value
         
         # Load state dict
