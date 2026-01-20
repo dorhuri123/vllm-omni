@@ -1,21 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-from .pipeline_anisora import (
-    AniSoraPipeline,
-    get_anisora_post_process_func,
-    get_anisora_pre_process_func,
-)
-from .pipeline_anisora_i2v import (
-    AniSoraI2VPipeline,
-    get_anisora_i2v_post_process_func,
-    get_anisora_i2v_pre_process_func,
+"""
+Index-AniSora model support for vLLM-Omni.
+
+AniSora (V1.0) is built on CogVideoX architecture (not Wan).
+This module provides Image-to-Video (I2V) generation pipeline.
+
+Model: Disty0/Index-anisora-5B-diffusers
+Architecture: CogVideoXTransformer3DModel, AutoencoderKLCogVideoX
+"""
+
+from .pipeline_anisora_i2v_cogvideox import (
+    AniSoraI2VCogVideoXPipeline,
 )
 
 __all__ = [
-    "AniSoraPipeline",
-    "get_anisora_post_process_func",
-    "get_anisora_pre_process_func",
-    "AniSoraI2VPipeline",
-    "get_anisora_i2v_post_process_func",
-    "get_anisora_i2v_pre_process_func",
+    "AniSoraI2VCogVideoXPipeline",
 ]

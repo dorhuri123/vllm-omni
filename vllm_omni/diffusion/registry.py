@@ -79,15 +79,11 @@ _DIFFUSION_MODELS = {
         "pipeline_flux2_klein",
         "Flux2KleinPipeline",
     ),
-    "AniSoraPipeline": (
+    # Index-AniSora I2V - uses CogVideoX architecture (not Wan)
+    "AniSoraI2VCogVideoXPipeline": (
         "anisora",
-        "pipeline_anisora",
-        "AniSoraPipeline",
-    ),
-    "AniSoraImageToVideoPipeline": (
-        "anisora",
-        "pipeline_anisora_i2v",
-        "AniSoraI2VPipeline",
+        "pipeline_anisora_i2v_cogvideox",
+        "AniSoraI2VCogVideoXPipeline",
     ),
 }
 

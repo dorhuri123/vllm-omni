@@ -34,8 +34,7 @@ th {
 |`StableDiffusion3Pipeline` | Stable-Diffusion-3 | `stabilityai/stable-diffusion-3.5-medium` |
 |`Flux2KleinPipeline` | FLUX.2-klein | `black-forest-labs/FLUX.2-klein-4B`, `black-forest-labs/FLUX.2-klein-9B` |
 |`StableAudioPipeline` | Stable-Audio-Open | `stabilityai/stable-audio-open-1.0` |
-|`AniSoraPipeline` | AniSora-T2V | Index-Anisora/AniSora-v3.1-T2V (local) |
-|`AniSoraImageToVideoPipeline` | AniSora-I2V | Index-Anisora/AniSora-v3.1-I2V (local) |
+|`AniSoraI2VCogVideoXPipeline` | AniSora-I2V | `Disty0/Index-anisora-5B-diffusers` |
 
 
 ## List of Supported Models for NPU
