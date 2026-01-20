@@ -93,7 +93,7 @@ class AniSoraV2I2VPipeline(nn.Module):
             subfolder="text_encoder",
             torch_dtype=dtype,
             local_files_only=local_wan,
-        )
+        ).to(self.device)
 
         # Load CLIP image encoder from Wan base (for I2V conditioning)
         print("Loading CLIP image encoder from Wan2.1...")
@@ -108,7 +108,7 @@ class AniSoraV2I2VPipeline(nn.Module):
                 subfolder="image_encoder",
                 torch_dtype=dtype,
                 local_files_only=local_wan,
-            )
+            ).to(self.device)
             self.has_image_encoder = True
         except Exception as e:
             print(f"Note: CLIP image encoder not available: {e}")
@@ -123,7 +123,7 @@ class AniSoraV2I2VPipeline(nn.Module):
             subfolder="vae",
             torch_dtype=torch.float32,  # VAE in float32 for precision
             local_files_only=local_wan,
-        )
+        ).to(self.device)
 
         # Load transformer from AniSora weights
         # Note: aardsoul-music/Wan2.1-Anisora-14B uses different key naming than diffusers
@@ -245,7 +245,7 @@ class AniSoraV2I2VPipeline(nn.Module):
                 for k in unexpected:
                     print(f"    - {k}")
         
-        self.transformer = self.transformer.to(dtype)
+        self.transformer = self.transformer.to(dtype).to(self.device)
 
         # Initialize scheduler
         print("Initializing scheduler...")
