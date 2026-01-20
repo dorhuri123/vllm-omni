@@ -126,9 +126,8 @@ class AniSoraV2I2VPipeline(nn.Module):
         )
 
         # Load transformer from AniSora weights
-        # Note: aardsoul-music/Wan2.1-Anisora-14B uses old "WanModel" class
-        # We load the config from Wan I2V base (which has correct in_channels=36)
-        # and then load weights from AniSora
+        # Note: aardsoul-music/Wan2.1-Anisora-14B uses different key naming than diffusers
+        # We need to convert the keys: self_attn->attn1, cross_attn->attn2, k->to_k, etc.
         print(f"Loading transformer from AniSora: {model_path}...")
         
         # Load config from Wan I2V base (which has in_channels=36 for I2V)
@@ -165,12 +164,39 @@ class AniSoraV2I2VPipeline(nn.Module):
         for sf_path in safetensor_files:
             state_dict.update(load_file(sf_path))
         
+        # Convert AniSora key names to diffusers format
+        # AniSora: blocks.X.self_attn.k.weight -> Diffusers: blocks.X.attn1.to_k.weight
+        # AniSora: blocks.X.cross_attn.k.weight -> Diffusers: blocks.X.attn2.to_k.weight
+        print("  Converting key names to diffusers format...")
+        converted_state_dict = {}
+        for key, value in state_dict.items():
+            new_key = key
+            # Convert attention layer names
+            new_key = new_key.replace(".self_attn.", ".attn1.")
+            new_key = new_key.replace(".cross_attn.", ".attn2.")
+            # Convert projection names
+            new_key = new_key.replace(".k.", ".to_k.")
+            new_key = new_key.replace(".q.", ".to_q.")
+            new_key = new_key.replace(".v.", ".to_v.")
+            new_key = new_key.replace(".o.", ".to_out.0.")
+            # Convert image key/value projections
+            new_key = new_key.replace(".k_img.", ".add_k_proj.")
+            new_key = new_key.replace(".v_img.", ".add_v_proj.")
+            new_key = new_key.replace(".norm_k_img.", ".norm_added_k.")
+            converted_state_dict[new_key] = value
+        
         # Load state dict
-        missing, unexpected = self.transformer.load_state_dict(state_dict, strict=False)
+        missing, unexpected = self.transformer.load_state_dict(converted_state_dict, strict=False)
         if missing:
             print(f"  Missing keys: {len(missing)}")
+            if len(missing) <= 10:
+                for k in missing:
+                    print(f"    - {k}")
         if unexpected:
             print(f"  Unexpected keys: {len(unexpected)}")
+            if len(unexpected) <= 10:
+                for k in unexpected:
+                    print(f"    - {k}")
         
         self.transformer = self.transformer.to(dtype)
 
