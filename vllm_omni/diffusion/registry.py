@@ -79,11 +79,17 @@ _DIFFUSION_MODELS = {
         "pipeline_flux2_klein",
         "Flux2KleinPipeline",
     ),
-    # Index-AniSora I2V - uses CogVideoX architecture (not Wan)
+    # Index-AniSora V1.0 (5B) - CogVideoX architecture
     "AniSoraI2VCogVideoXPipeline": (
         "anisora",
         "pipeline_anisora_i2v_cogvideox",
         "AniSoraI2VCogVideoXPipeline",
+    ),
+    # Index-AniSora V2/V3 (14B) - Wan2.1 architecture with hybrid loading
+    "AniSoraV2I2VPipeline": (
+        "anisora",
+        "pipeline_anisora_v2_i2v",
+        "AniSoraV2I2VPipeline",
     ),
 }
 
@@ -113,7 +119,9 @@ def initialize_model(
 
         return model
     else:
-        raise ValueError(f"Model class {od_config.model_class_name} not found in diffusion model registry.")
+        raise ValueError(
+            f"Model class {od_config.model_class_name} not found in diffusion model registry."
+        )
 
 
 _DIFFUSION_POST_PROCESS_FUNCS = {
